@@ -1,0 +1,762 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0e1116">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Funkstille – verschlüsselte Kommunikation</title>
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<style>
+:root{--bg:#0e1116;--panel:#161b22;--panel2:#1f2630;--line:#2b3440;--txt:#e6edf3;--mut:#8b98a8;--acc:#2fbf9f;--acc2:#1e8f77;--warn:#e5a50a;--err:#e5534b;--out:#1d4d43;--in:#222a35}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);font:16px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+body{padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+button{font:inherit;color:inherit;cursor:pointer;border:0;border-radius:10px;padding:10px 14px;background:var(--panel2)}
+button.pri{background:var(--acc);color:#04130f;font-weight:600}
+button.dan{background:transparent;color:var(--err);border:1px solid var(--err)}
+button.ico{background:transparent;padding:8px;font-size:20px;line-height:1;border-radius:50%}
+button:disabled{opacity:.5}
+input,textarea{font:inherit;color:var(--txt);background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;width:100%;outline:none}
+input:focus,textarea:focus{border-color:var(--acc)}
+label{display:block;font-size:13px;color:var(--mut);margin:12px 0 4px}
+.view{display:none;height:100%;flex-direction:column}
+.view.on{display:flex}
+.center{max-width:440px;margin:auto;padding:24px;width:100%}
+.logo{font-size:44px;text-align:center}
+h1{font-size:24px;text-align:center;margin:8px 0 4px}
+.sub{color:var(--mut);text-align:center;font-size:14px;margin-bottom:16px}
+.note{font-size:13px;color:var(--mut);background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-top:14px}
+.err{color:var(--err);font-size:14px;min-height:20px;margin-top:8px}
+.row{display:flex;gap:8px;align-items:center}
+.grow{flex:1;min-width:0}
+header{display:flex;align-items:center;gap:8px;padding:10px 12px;background:var(--panel);border-bottom:1px solid var(--line)}
+header .t{font-weight:600;font-size:17px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+header .s{font-size:12px;color:var(--mut)}
+.dot{width:9px;height:9px;border-radius:50%;background:#555;display:inline-block;flex:none}
+.dot.on{background:var(--acc)}
+.scroll{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px;margin:12px}
+.idbox{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:14px;word-break:break-all;background:var(--panel2);padding:8px 10px;border-radius:8px;margin:6px 0 10px}
+.contact{display:flex;align-items:center;gap:12px;padding:12px 14px;border-bottom:1px solid var(--line);cursor:pointer}
+.contact:active{background:var(--panel)}
+.av{width:42px;height:42px;border-radius:50%;background:var(--acc2);display:flex;align-items:center;justify-content:center;font-weight:700;flex:none;position:relative}
+.av .dot{position:absolute;right:-1px;bottom:-1px;border:2px solid var(--bg);width:13px;height:13px}
+.cname{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cprev{font-size:13px;color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.badge{background:var(--acc);color:#04130f;font-size:12px;font-weight:700;border-radius:10px;padding:1px 7px}
+.badge.req{background:var(--warn)}
+.empty{color:var(--mut);text-align:center;padding:28px 20px;font-size:14px}
+#msgs{padding:10px 10px 4px;display:flex;flex-direction:column;gap:4px}
+.m{max-width:82%;padding:7px 10px 5px;border-radius:14px;background:var(--in);align-self:flex-start;word-wrap:break-word;white-space:pre-wrap}
+.m.out{background:var(--out);align-self:flex-end}
+.m.sys{align-self:center;background:transparent;color:var(--mut);font-size:13px;text-align:center}
+.m .meta{font-size:11px;color:var(--mut);text-align:right;margin-top:2px;white-space:nowrap}
+.m img{max-width:100%;max-height:300px;border-radius:8px;display:block}
+.m audio{max-width:240px;height:40px;display:block}
+.m a.file{color:var(--txt);display:flex;gap:8px;align-items:center;text-decoration:none}
+.m a.file b{font-weight:600;word-break:break-all}
+.banner{background:#3a2f0b;color:#f3d27a;padding:10px 12px;font-size:14px;border-bottom:1px solid var(--line)}
+.banner .row{margin-top:8px}
+.composer{display:flex;gap:6px;align-items:flex-end;padding:8px;background:var(--panel);border-top:1px solid var(--line)}
+.composer textarea{resize:none;max-height:120px;min-height:42px;border-radius:21px;padding:10px 14px}
+.composer button.ico{background:var(--panel2);width:42px;height:42px;flex:none}
+.composer button#sendBtn{background:var(--acc);color:#04130f}
+#recBar{display:none;align-items:center;gap:10px;padding:10px 12px;background:#3b1414;border-top:1px solid var(--line)}
+#recBar.on{display:flex}
+.recdot{width:12px;height:12px;border-radius:50%;background:var(--err);animation:bl 1s infinite}
+@keyframes bl{50%{opacity:.2}}
+#call{position:fixed;inset:0;background:linear-gradient(#0d2b25,#0e1116 70%);display:none;flex-direction:column;align-items:center;justify-content:center;gap:14px;z-index:20;padding:24px;text-align:center}
+#call.on{display:flex}
+#call .av{width:96px;height:96px;font-size:38px}
+#callName{font-size:24px;font-weight:600}
+#callStatus{color:var(--mut)}
+#callSec{font-size:13px;min-height:18px}
+.cbtns{display:flex;gap:22px;margin-top:30px}
+.cbtns button{width:64px;height:64px;border-radius:50%;font-size:26px}
+.cbtns .end{background:var(--err)}
+.cbtns .ok{background:var(--acc)}
+#toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:#000c;color:#fff;padding:10px 16px;border-radius:12px;font-size:14px;z-index:40;display:none;max-width:90%;text-align:center}
+#dlg{position:fixed;inset:0;background:#0009;display:none;align-items:center;justify-content:center;z-index:30;padding:20px}
+#dlg.on{display:flex}
+#dlg .box{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px;max-width:380px;width:100%}
+#dlg .row{justify-content:flex-end;margin-top:16px}
+.safety{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:20px;letter-spacing:1px;text-align:center;line-height:1.7;background:var(--panel2);border-radius:10px;padding:10px}
+.small{font-size:12px;color:var(--mut)}
+hr{border:0;border-top:1px solid var(--line);margin:16px 0}
+</style>
+</head>
+<body>
+
+<!-- Einrichtung -->
+<section class="view" id="vSetup"><div class="scroll"><div class="center">
+  <div class="logo">🔐</div>
+  <h1>Funkstille</h1>
+  <div class="sub">Nachrichten, Dateien und Anrufe – Ende-zu-Ende verschlüsselt, direkt von Gerät zu Gerät.</div>
+  <label>Passwort für dieses Gerät</label>
+  <input type="password" id="setPw1" autocomplete="new-password" placeholder="mindestens 10 Zeichen">
+  <label>Passwort wiederholen</label>
+  <input type="password" id="setPw2" autocomplete="new-password">
+  <div class="err" id="setErr"></div>
+  <button class="pri" style="width:100%" id="setBtn">Schlüssel erzeugen</button>
+  <div class="note">Beim Einrichten wird auf diesem Gerät ein privater Schlüssel erzeugt. Er verlässt das Gerät nie und wird mit deinem Passwort verschlüsselt gespeichert. <b>Ohne Passwort gibt es keinen Zugang – auch keine Wiederherstellung.</b></div>
+</div></div></section>
+
+<!-- Entsperren -->
+<section class="view" id="vUnlock"><div class="scroll"><div class="center">
+  <div class="logo">🔒</div>
+  <h1>Funkstille</h1>
+  <div class="sub">Gesperrt. Passwort eingeben zum Entschlüsseln.</div>
+  <input type="password" id="unPw" autocomplete="current-password" placeholder="Passwort">
+  <div class="err" id="unErr"></div>
+  <button class="pri" style="width:100%" id="unBtn">Entsperren</button>
+  <div style="text-align:center;margin-top:30px"><button class="dan" id="wipeBtn1">Alle Daten auf diesem Gerät löschen</button></div>
+</div></div></section>
+
+<!-- Kontakte -->
+<section class="view" id="vMain">
+  <header>
+    <div class="grow"><div class="t">Funkstille</div><div class="s"><span class="dot" id="netDot"></span> <span id="netTxt">verbinde…</span></div></div>
+    <button class="ico" id="setOpen" title="Einstellungen">⚙️</button>
+    <button class="ico" id="lockBtn" title="Sperren">🔒</button>
+  </header>
+  <div class="scroll">
+    <div class="card">
+      <div class="small">Deine Funkstille-ID</div>
+      <div class="idbox" id="myId"></div>
+      <div class="row">
+        <button class="grow" id="copyId">ID kopieren</button>
+        <button class="grow" id="copyLink">Einladungslink</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="small" style="margin-bottom:6px">Kontakt hinzufügen</div>
+      <input id="addName" placeholder="Name">
+      <input id="addId" placeholder="Funkstille-ID (fs…)" style="margin-top:8px;font-family:ui-monospace,monospace">
+      <button class="pri" style="width:100%;margin-top:8px" id="addBtn">Hinzufügen</button>
+    </div>
+    <div id="clist"></div>
+  </div>
+</section>
+
+<!-- Chat -->
+<section class="view" id="vChat">
+  <header>
+    <button class="ico" id="backBtn">←</button>
+    <div class="grow" id="chatHead" style="cursor:pointer"><div class="t" id="chatName"></div><div class="s"><span class="dot" id="chatDot"></span> <span id="chatState"></span></div></div>
+    <button class="ico" id="callBtn" title="Anrufen">📞</button>
+    <button class="ico" id="infoBtn" title="Kontakt">ℹ️</button>
+  </header>
+  <div id="reqBanner" class="banner" style="display:none">Unbekannter Kontakt. Prüfe die Sicherheitsnummer, bevor du annimmst.
+    <div class="row"><button class="pri" id="reqOk">Annehmen</button><button class="dan" id="reqNo">Blockieren</button></div></div>
+  <div class="scroll" id="msgScroll"><div id="msgs"></div></div>
+  <div id="recBar"><div class="recdot"></div><div class="grow" id="recTime">0:00</div><button id="recCancel">Verwerfen</button><button class="pri" id="recSend">Senden</button></div>
+  <div class="composer" id="composer">
+    <button class="ico" id="attBtn" title="Datei">📎</button>
+    <input type="file" id="fileIn" multiple hidden>
+    <textarea id="txt" rows="1" placeholder="Nachricht"></textarea>
+    <button class="ico" id="micBtn" title="Sprachnachricht">🎤</button>
+    <button class="ico" id="sendBtn" title="Senden" style="display:none">➤</button>
+  </div>
+</section>
+
+<!-- Kontaktinfo -->
+<section class="view" id="vInfo">
+  <header><button class="ico" id="infoBack">←</button><div class="t grow">Kontakt</div></header>
+  <div class="scroll"><div class="card">
+    <label>Name</label>
+    <div class="row"><input id="infName" class="grow"><button id="infSave">Speichern</button></div>
+    <label>Funkstille-ID</label>
+    <div class="idbox" id="infId"></div>
+    <label>Sicherheitsnummer</label>
+    <div class="safety" id="infSafety"></div>
+    <div class="small" style="margin-top:8px">Vergleicht diese Nummer persönlich oder am Telefon. Stimmt sie auf beiden Geräten überein, spricht niemand dazwischen.</div>
+    <hr>
+    <div class="row"><button class="dan grow" id="infBlock">Blockieren</button><button class="dan grow" id="infDel">Kontakt löschen</button></div>
+  </div></div>
+</section>
+
+<!-- Einstellungen -->
+<section class="view" id="vSet">
+  <header><button class="ico" id="setBack">←</button><div class="t grow">Einstellungen</div></header>
+  <div class="scroll"><div class="card">
+    <div class="small">Vermittlungsserver (nur für den Verbindungsaufbau – er sieht keine Inhalte). Leer lassen = öffentlicher PeerJS-Server.</div>
+    <label>Host</label><input id="sHost" placeholder="z. B. peer.meine-firma.de">
+    <div class="row"><div class="grow"><label>Port</label><input id="sPort" placeholder="443"></div><div class="grow"><label>Pfad</label><input id="sPath" placeholder="/"></div></div>
+    <label>API-Key</label><input id="sKey" placeholder="peerjs">
+    <label><input type="checkbox" id="sSecure" style="width:auto" checked> HTTPS/WSS verwenden</label>
+    <label>ICE-/TURN-Server (JSON, optional)</label>
+    <textarea id="sIce" rows="4" placeholder='[{"urls":"stun:stun.l.google.com:19302"},{"urls":"turn:turn.example.de:3478","username":"u","credential":"p"}]'></textarea>
+    <div class="small" style="margin-top:6px">Ein eigener TURN-Server hilft, wenn Anrufe im Mobilfunknetz nicht zustande kommen. Auch über TURN bleibt alles verschlüsselt.</div>
+    <button class="pri" style="width:100%;margin-top:12px" id="sSave">Speichern &amp; neu verbinden</button>
+    <hr>
+    <label>Passwort ändern</label>
+    <input type="password" id="pwOld" placeholder="Altes Passwort">
+    <input type="password" id="pwNew" placeholder="Neues Passwort (min. 10 Zeichen)" style="margin-top:8px">
+    <button style="width:100%;margin-top:8px" id="pwBtn">Passwort ändern</button>
+    <hr>
+    <button class="dan" style="width:100%" id="wipeBtn2">Alle Daten auf diesem Gerät löschen</button>
+  </div></div>
+</section>
+
+<!-- Anruf -->
+<div id="call">
+  <div class="av" id="callAv">?</div>
+  <div id="callName"></div>
+  <div id="callStatus"></div>
+  <div id="callSec"></div>
+  <div class="cbtns">
+    <button id="callMute" title="Stumm">🎙️</button>
+    <button class="ok" id="callAccept" title="Annehmen">📞</button>
+    <button class="end" id="callEnd" title="Auflegen">✕</button>
+  </div>
+  <audio id="remoteAudio" autoplay playsinline></audio>
+</div>
+
+<div id="dlg"><div class="box"><div id="dlgTxt"></div><div class="row"><button id="dlgNo">Abbrechen</button><button class="pri" id="dlgYes">OK</button></div></div></div>
+<div id="toast"></div>
+
+<script>
+'use strict';
+/* ============================================================
+   Funkstille – Ende-zu-Ende verschlüsselte Kommunikation
+   Krypto:  ECDH P-256 (Identität + flüchtige Sitzungsschlüssel),
+            HKDF-SHA-256, AES-256-GCM, PBKDF2 (600 000 Runden)
+   Transport: WebRTC (PeerJS), direkt Gerät-zu-Gerät
+   ============================================================ */
+const $ = s => document.querySelector(s);
+const te = new TextEncoder(), td = new TextDecoder();
+const S = crypto.subtle;
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const MAX_FILE = 25 * 1024 * 1024, CHUNK = 8 * 1024;
+
+function b64(u8){ u8 = u8 instanceof Uint8Array ? u8 : new Uint8Array(u8); let s=''; for(let i=0;i<u8.length;i+=0x8000) s+=String.fromCharCode.apply(null,u8.subarray(i,i+0x8000)); return btoa(s); }
+function unb64(s){ const b=atob(s), u=new Uint8Array(b.length); for(let i=0;i<b.length;i++) u[i]=b.charCodeAt(i); return u; }
+const hex = buf => [...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,'0')).join('');
+const rid = () => hex(crypto.getRandomValues(new Uint8Array(12)));
+const sha256 = async d => new Uint8Array(await S.digest('SHA-256', d));
+const cat = (...a) => { const o=new Uint8Array(a.reduce((n,x)=>n+x.length,0)); let p=0; for(const x of a){o.set(x,p);p+=x.length;} return o; };
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmtSize = n => n<1024? n+' B' : n<1048576? (n/1024).toFixed(0)+' KB' : (n/1048576).toFixed(1)+' MB';
+const fmtTime = ts => new Date(ts).toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'});
+const fmtDur = s => Math.floor(s/60)+':'+String(Math.floor(s%60)).padStart(2,'0');
+const ECDH = {name:'ECDH', namedCurve:'P-256'};
+
+/* ---------------- UI-Helfer ---------------- */
+let toastT;
+function toast(t, ms=3200){ const e=$('#toast'); e.textContent=t; e.style.display='block'; clearTimeout(toastT); toastT=setTimeout(()=>e.style.display='none', ms); }
+function ask(html, yes='OK'){ return new Promise(r=>{ $('#dlgTxt').innerHTML=html; $('#dlgYes').textContent=yes; $('#dlg').classList.add('on');
+  const done=v=>{ $('#dlg').classList.remove('on'); $('#dlgYes').onclick=$('#dlgNo').onclick=null; r(v); };
+  $('#dlgYes').onclick=()=>done(true); $('#dlgNo').onclick=()=>done(false); }); }
+function show(v){ document.querySelectorAll('.view').forEach(x=>x.classList.toggle('on', x.id===v)); }
+function lsGet(k,d){ try{ const v=localStorage.getItem(k); return v?JSON.parse(v):d; }catch{ return d; } }
+function lsSet(k,v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch{} }
+
+/* ---------------- IndexedDB ---------------- */
+let DB;
+function idbOpen(){ return new Promise((res,rej)=>{ const r=indexedDB.open('funkstille',1);
+  r.onupgradeneeded=()=>{ for(const s of ['meta','contacts','messages','blobs']) r.result.createObjectStore(s); };
+  r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error); }); }
+function idb(store, mode, fn){ return new Promise((res,rej)=>{ const t=DB.transaction(store,mode); const q=fn(t.objectStore(store)); t.oncomplete=()=>res(q&&q.result); t.onerror=()=>rej(t.error); }); }
+const iGet = (s,k) => idb(s,'readonly',o=>o.get(k));
+const iPut = (s,k,v) => idb(s,'readwrite',o=>o.put(v,k));
+const iDel = (s,k) => idb(s,'readwrite',o=>o.delete(k));
+function iAll(s){ return new Promise((res,rej)=>{ const out=[]; const t=DB.transaction(s,'readonly'); const c=t.objectStore(s).openCursor();
+  c.onsuccess=()=>{ const cur=c.result; if(cur){ out.push([cur.key,cur.value]); cur.continue(); } }; t.oncomplete=()=>res(out); t.onerror=()=>rej(t.error); }); }
+
+/* ---------------- Tresor (lokale Verschlüsselung) ---------------- */
+let vault = null; // AES-GCM-Schlüssel aus dem Passwort
+async function deriveVault(pw, salt){ const base=await S.importKey('raw', te.encode(pw), 'PBKDF2', false, ['deriveKey']);
+  return S.deriveKey({name:'PBKDF2', salt, iterations:600000, hash:'SHA-256'}, base, {name:'AES-GCM',length:256}, false, ['encrypt','decrypt']); }
+async function seal(key, bytes){ const iv=crypto.getRandomValues(new Uint8Array(12)); return {iv, ct:new Uint8Array(await S.encrypt({name:'AES-GCM',iv}, key, bytes))}; }
+async function unseal(key, box){ return new Uint8Array(await S.decrypt({name:'AES-GCM',iv:box.iv}, key, box.ct)); }
+const sealJ = (o) => seal(vault, te.encode(JSON.stringify(o)));
+const unsealJ = async (b) => JSON.parse(td.decode(await unseal(vault, b)));
+
+/* ---------------- Identität ---------------- */
+let me = null; // {id, pubRaw, priv}
+const idFromPub = async pub => 'fs' + hex(await sha256(pub)).slice(0,32);
+const importPriv = pk => S.importKey('pkcs8', pk, ECDH, false, ['deriveBits']);
+const importPub = raw => S.importKey('raw', raw, ECDH, false, []);
+const dh = async (priv, pub) => new Uint8Array(await S.deriveBits({name:'ECDH', public:pub}, priv, 256));
+const fmtId = id => id.replace(/(.{4})/g,'$1 ').trim();
+const normId = s => s.replace(/[^a-z0-9]/gi,'').toLowerCase();
+
+async function createIdentity(pw){
+  const kp = await S.generateKey(ECDH, true, ['deriveBits']);
+  const pkcs8 = new Uint8Array(await S.exportKey('pkcs8', kp.privateKey));
+  const pubRaw = new Uint8Array(await S.exportKey('raw', kp.publicKey));
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  vault = await deriveVault(pw, salt);
+  const id = await idFromPub(pubRaw);
+  await iPut('meta','identity',{v:1, id, pubRaw, salt, box: await seal(vault, pkcs8)});
+  me = {id, pubRaw, priv: await importPriv(pkcs8)};
+  pkcs8.fill(0);
+}
+async function unlockIdentity(pw){
+  const m = await iGet('meta','identity');
+  const v = await deriveVault(pw, m.salt);
+  const pk = await unseal(v, m.box); // wirft bei falschem Passwort
+  vault = v; me = {id:m.id, pubRaw:m.pubRaw, priv: await importPriv(pk)}; pk.fill(0);
+}
+async function changePassword(oldPw, newPw){
+  const m = await iGet('meta','identity');
+  const oldV = await deriveVault(oldPw, m.salt);
+  const pk = await unseal(oldV, m.box);
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const newV = await deriveVault(newPw, salt);
+  // alle gespeicherten Daten mit neuem Schlüssel neu verschlüsseln
+  for(const s of ['contacts','messages','blobs']) for(const [k,b] of await iAll(s)) await iPut(s, k, await seal(newV, await unseal(oldV, b)));
+  await iPut('meta','identity',{...m, salt, box: await seal(newV, pk)}); pk.fill(0);
+  vault = newV;
+}
+async function safetyNumber(pubA, pubB){
+  const k = v => typeof v==='string' ? v : b64(v);
+  const [x,y] = [k(pubA), k(pubB)].sort();
+  const h = await sha256(te.encode('funkstille-safety|'+x+'|'+y)); let out=[];
+  for(let i=0;i<10;i++) out.push(String(((h[3*i]<<16)|(h[3*i+1]<<8)|h[3*i+2]) % 100000).padStart(5,'0'));
+  return out.join(' ');
+}
+
+/* ---------------- Daten ---------------- */
+const contacts = new Map(); // id -> {id,name,status:'ok'|'request'|'blocked',pub,lastRead}
+const msgs = new Map();     // cid -> [msg]
+const msgIdx = new Map();   // msgId -> msg
+async function loadData(){
+  for(const [,b] of await iAll('contacts')){ const c=await unsealJ(b); contacts.set(c.id,c); }
+  for(const [,b] of await iAll('messages')){ const m=await unsealJ(b); addLocal(m); }
+  for(const a of msgs.values()) a.sort((p,q)=>p.ts-q.ts);
+}
+function addLocal(m){ msgIdx.set(m.id,m); if(!msgs.has(m.cid)) msgs.set(m.cid,[]); msgs.get(m.cid).push(m); }
+const saveContact = async c => { contacts.set(c.id,c); await iPut('contacts', c.id, await sealJ(c)); };
+const saveMsg = async m => iPut('messages', m.id, await sealJ(m));
+const saveBlob = async (id, bytes) => iPut('blobs', id, await seal(vault, bytes));
+const loadBlob = async id => { const b=await iGet('blobs', id); return b ? unseal(vault, b) : null; };
+
+/* ---------------- Netzwerk ---------------- */
+let peer = null, netOk = false, retryT = null;
+const sessions = new Map(); // peerId -> Sitzung
+function settings(){ return lsGet('fs-settings', {}); }
+function startPeer(){
+  if(peer){ try{ peer.destroy(); }catch{} }
+  sessions.clear();
+  const s = settings(), o = {debug:1};
+  if(s.host){ o.host=s.host; o.port=+s.port||443; o.path=s.path||'/'; o.secure=s.secure!==false; if(s.key) o.key=s.key; }
+  if(s.ice){ try{ o.config={iceServers: JSON.parse(s.ice)}; }catch{ toast('ICE-Server-JSON ungültig – Standard wird benutzt'); } }
+  peer = new Peer(me.id, o);
+  peer.on('open', ()=>{ setNet(true); connectAll(); });
+  peer.on('connection', c => setupConn(c, false));
+  peer.on('call', onIncomingCall);
+  peer.on('disconnected', ()=>{ setNet(false); setTimeout(()=>{ if(peer && !peer.destroyed && peer.disconnected) peer.reconnect(); }, 3000); });
+  peer.on('error', e => {
+    if(e.type==='peer-unavailable') return; // Kontakt offline
+    if(e.type==='unavailable-id') toast('Diese ID ist gerade schon online – ist die App in einem anderen Tab offen?', 6000);
+    else if(['network','server-error','socket-error','socket-closed'].includes(e.type)) setNet(false);
+    console.warn('peer', e.type, e);
+  });
+  clearInterval(retryT); retryT = setInterval(connectAll, 20000);
+}
+function setNet(on){ netOk=on; $('#netDot').classList.toggle('on',on); $('#netTxt').textContent = on ? 'online – erreichbar' : 'offline – verbinde neu…'; }
+function connectAll(){ if(!peer || !netOk) return; for(const c of contacts.values()) if(c.status==='ok' && !sessions.has(c.id)) connectTo(c.id); }
+function connectTo(id){ if(sessions.has(id) || !peer || peer.disconnected) return; setupConn(peer.connect(id, {reliable:true, serialization:'json'}), true); }
+
+function setupConn(c, outgoing){
+  const st = {conn:c, outgoing, key:null, ready:false, eph:null, chain:Promise.resolve(), incoming:{}};
+  st.keyReady = new Promise(r => st.setKey = r);
+  if(!outgoing){ const ct=contacts.get(c.peer); if(ct && ct.status==='blocked'){ c.on('open',()=>c.close()); return; } }
+  c.on('open', async () => {
+    const ex = sessions.get(c.peer);
+    if(ex && ex.conn !== c){
+      // doppelte Verbindung: behalte die vom Gerät mit der kleineren ID aufgebaute
+      const initNew = outgoing ? me.id : c.peer, initEx = ex.outgoing ? me.id : c.peer;
+      if(initNew === initEx || initNew > initEx){ c.close(); return; }
+      ex.dropped = true; ex.conn.close();
+    }
+    sessions.set(c.peer, st);
+    st.eph = await S.generateKey(ECDH, false, ['deriveBits']);
+    st.ephRaw = new Uint8Array(await S.exportKey('raw', st.eph.publicKey));
+    c.send({t:'hello', v:1, id:me.id, pub:b64(me.pubRaw), eph:b64(st.ephRaw)});
+    if(st.pendingHello) onHello(st, st.pendingHello);
+  });
+  c.on('data', d => {
+    if(!d || typeof d!=='object') return;
+    if(d.t==='hello') return onHello(st, d);
+    if(d.t==='e') st.chain = st.chain.then(()=>onEnc(st, d)).catch(e=>console.warn(e));
+  });
+  c.on('close', () => { if(sessions.get(c.peer)===st){ sessions.delete(c.peer); refreshPresence(c.peer); if(call && call.peer===c.peer) endCall(false); } });
+  c.on('error', e => console.warn('conn', e));
+}
+
+async function onHello(st, m){
+  if(!st.eph){ st.pendingHello = m; return; }
+  if(st.key || st.helloBusy) return; st.helloBusy = true;
+  try{
+    const pub = unb64(m.pub);
+    if(m.id !== st.conn.peer || await idFromPub(pub) !== m.id) throw new Error('ID passt nicht zum Schlüssel');
+    const ct0 = contacts.get(m.id);
+    if(ct0 && ct0.pub && ct0.pub !== m.pub) throw new Error('Schlüssel hat sich geändert');
+    const b1 = await dh(st.eph.privateKey, await importPub(unb64(m.eph)));  // Vorwärtsgeheimnis
+    const b2 = await dh(me.priv, await importPub(pub));                       // Identitätsnachweis
+    const ids = [me.id, m.id].sort(), ephs = [b64(st.ephRaw), m.eph].sort();
+    const salt = await sha256(te.encode(ids.join('|')+'|'+ephs.join('|')));
+    const hk = await S.importKey('raw', cat(b1,b2), 'HKDF', false, ['deriveKey']);
+    st.key = await S.deriveKey({name:'HKDF', hash:'SHA-256', salt, info:te.encode('funkstille v1 session')}, hk, {name:'AES-GCM',length:256}, false, ['encrypt','decrypt']);
+    b1.fill(0); b2.fill(0);
+    let ct = ct0;
+    if(!ct){ ct = {id:m.id, name:'Unbekannt '+m.id.slice(2,6), status:'request', pub:m.pub, lastRead:0}; await saveContact(ct); toast('Neue Kontaktanfrage'); renderContacts(); }
+    else if(!ct.pub){ ct.pub = m.pub; await saveContact(ct); }
+    if(ct.status==='blocked'){ st.conn.close(); return; }
+    st.setKey();
+    await sendEnc(st, {k:'ready'});
+  }catch(e){ console.warn(e); toast('⚠️ Sicherer Verbindungsaufbau abgelehnt: '+e.message, 6000); st.conn.close(); }
+}
+
+async function sendEnc(st, obj){
+  const dc = st.conn.dataChannel;
+  while(dc && dc.bufferedAmount > 1<<20){ if(!st.conn.open) throw new Error('getrennt'); await sleep(25); }
+  if(!st.conn.open) throw new Error('getrennt');
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = await S.encrypt({name:'AES-GCM', iv}, st.key, te.encode(JSON.stringify(obj)));
+  st.conn.send({t:'e', iv:b64(iv), ct:b64(ct)});
+}
+
+async function onEnc(st, d){
+  await st.keyReady;
+  let p;
+  try{ p = JSON.parse(td.decode(await S.decrypt({name:'AES-GCM', iv:unb64(d.iv)}, st.key, unb64(d.ct)))); }
+  catch{ toast('⚠️ Nachricht ließ sich nicht entschlüsseln – Verbindung getrennt'); st.conn.close(); return; }
+  const cid = st.conn.peer, ct = contacts.get(cid);
+  switch(p.k){
+    case 'ready': st.ready = true; refreshPresence(cid); flush(cid); break;
+    case 'msg':
+      if(!msgIdx.has(p.id)){ const m={id:p.id, cid, dir:'in', ts:p.ts, kind:'text', text:String(p.text).slice(0,20000), status:'received'}; addLocal(m); await saveMsg(m); onNewIn(m); }
+      await sendEnc(st, {k:'ack', id:p.id}); break;
+    case 'file-start':
+      if(msgIdx.has(p.id)){ await sendEnc(st,{k:'ack',id:p.id}); st.incoming[p.id]={skip:true}; break; }
+      if(p.size > MAX_FILE){ st.incoming[p.id]={skip:true}; break; }
+      st.incoming[p.id] = {meta:p, parts:[], got:0}; break;
+    case 'file-chunk': {
+      const inc = st.incoming[p.id]; if(!inc || inc.skip) break;
+      inc.parts[p.i] = unb64(p.data); inc.got++;
+      if(inc.got === inc.meta.chunks){
+        delete st.incoming[p.id];
+        const bytes = cat(...inc.parts), mt = inc.meta;
+        const m = {id:mt.id, cid, dir:'in', ts:mt.ts, kind:mt.voice?'voice':'file', name:String(mt.name).slice(0,200), mime:String(mt.mime||''), size:bytes.length, status:'received'};
+        await saveBlob(m.id, bytes); addLocal(m); await saveMsg(m); onNewIn(m);
+        await sendEnc(st, {k:'ack', id:m.id});
+      } break; }
+    case 'ack': { const m = msgIdx.get(p.id); if(m && m.dir==='out' && m.status!=='delivered'){ m.status='delivered'; await saveMsg(m); updateMsgEl(m); } break; }
+    case 'call-fp': if(call && call.peer===cid){ call.theirFp = p.fp; checkCallFp(); } break;
+    case 'call-end': if(call && call.peer===cid) endCall(false); break;
+  }
+}
+
+async function flush(cid){
+  const st = sessions.get(cid), ct = contacts.get(cid);
+  if(!st || !st.ready || st.flushing || !ct || ct.status!=='ok') return;
+  st.flushing = true;
+  try{
+    for(const m of (msgs.get(cid)||[])){
+      if(m.dir!=='out' || m.status!=='pending') continue;
+      if(m.kind==='text') await sendEnc(st, {k:'msg', id:m.id, ts:m.ts, text:m.text});
+      else {
+        const bytes = await loadBlob(m.id); if(!bytes) continue;
+        const n = Math.max(1, Math.ceil(bytes.length/CHUNK));
+        await sendEnc(st, {k:'file-start', id:m.id, ts:m.ts, name:m.name, mime:m.mime, size:bytes.length, chunks:n, voice:m.kind==='voice'});
+        for(let i=0;i<n;i++){
+          await sendEnc(st, {k:'file-chunk', id:m.id, i, data:b64(bytes.subarray(i*CHUNK,(i+1)*CHUNK))});
+          if(n>8 && i%8===0) setProgress(m, i/n);
+        }
+        setProgress(m, null);
+      }
+      m.status = 'sent'; await saveMsg(m); updateMsgEl(m);
+    }
+  }catch(e){ console.warn('flush', e); }
+  st.flushing = false;
+}
+
+/* ---------------- Senden ---------------- */
+let cur = null; // aktueller Chat
+async function sendText(){
+  const t = $('#txt').value.trim(); if(!t || !cur) return;
+  $('#txt').value=''; autoGrow(); toggleSend();
+  const m = {id:rid(), cid:cur, dir:'out', ts:Date.now(), kind:'text', text:t, status:'pending'};
+  addLocal(m); await saveMsg(m); appendMsg(m); flush(cur);
+}
+async function queueFile(cid, blob, name, voice){
+  if(blob.size > MAX_FILE){ toast('Datei zu groß (max. 25 MB)'); return; }
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  const m = {id:rid(), cid, dir:'out', ts:Date.now(), kind:voice?'voice':'file', name, mime:blob.type||'application/octet-stream', size:bytes.length, status:'pending'};
+  await saveBlob(m.id, bytes); addLocal(m); await saveMsg(m);
+  if(cur===cid) appendMsg(m); flush(cid);
+}
+
+/* ---------------- Sprachnachricht ---------------- */
+let rec = null;
+async function startRec(){
+  if(!window.MediaRecorder){ toast('Aufnahme wird von diesem Browser nicht unterstützt'); return; }
+  let stream; try{ stream = await navigator.mediaDevices.getUserMedia({audio:true}); }catch{ toast('Kein Zugriff aufs Mikrofon'); return; }
+  const mime = ['audio/webm;codecs=opus','audio/mp4','audio/webm','audio/ogg'].find(x=>MediaRecorder.isTypeSupported(x)) || '';
+  const mr = new MediaRecorder(stream, mime?{mimeType:mime}:{});
+  const r = rec = {mr, stream, parts:[], start:Date.now(), cid:cur};
+  mr.ondataavailable = e => { if(e.data.size) r.parts.push(e.data); };
+  mr.start(250);
+  $('#recBar').classList.add('on'); $('#composer').style.display='none';
+  rec.timer = setInterval(()=>{ $('#recTime').textContent = fmtDur((Date.now()-rec.start)/1000); }, 300);
+}
+function stopRec(send){
+  if(!rec) return; const r = rec; rec = null;
+  clearInterval(r.timer); $('#recBar').classList.remove('on'); $('#composer').style.display='';
+  r.mr.onstop = () => {
+    r.stream.getTracks().forEach(t=>t.stop());
+    if(!send) return;
+    const type = r.mr.mimeType || 'audio/webm';
+    const ext = type.includes('mp4') ? 'm4a' : type.includes('ogg') ? 'ogg' : 'webm';
+    queueFile(r.cid, new Blob(r.parts, {type}), 'Sprachnachricht.'+ext, true);
+  };
+  r.mr.stop();
+}
+
+/* ---------------- Anrufe ---------------- */
+let call = null;
+const sdpFp = sdp => { const m = sdp && sdp.match(/a=fingerprint:(\S+) (\S+)/i); return m ? (m[1]+' '+m[2]).toUpperCase() : null; };
+async function getMic(){ return navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true, noiseSuppression:true, autoGainControl:true}}); }
+async function startCall(cid){
+  const st = sessions.get(cid), ct = contacts.get(cid);
+  if(call) return;
+  if(!ct || ct.status!=='ok'){ toast('Erst Kontakt annehmen'); return; }
+  if(!st || !st.ready){ toast('Kontakt ist gerade nicht online. Anrufe gehen nur, wenn beide die App offen haben.', 5000); return; }
+  let stream; try{ stream = await getMic(); }catch{ toast('Kein Zugriff aufs Mikrofon'); return; }
+  const mc = peer.call(cid, stream);
+  call = {mc, peer:cid, stream, incoming:false};
+  bindCall(mc); showCall('Klingelt…', false);
+  call.noAnswer = setTimeout(()=>{ if(call && !call.start){ toast('Keine Antwort'); endCall(true); } }, 45000);
+}
+function onIncomingCall(mc){
+  const st = sessions.get(mc.peer), ct = contacts.get(mc.peer);
+  if(call || !st || !st.ready || !ct || ct.status!=='ok'){ mc.close(); return; }
+  call = {mc, peer:mc.peer, incoming:true};
+  mc.on('close', ()=>{ if(call && call.mc===mc) endCall(false); });
+  showCall('Eingehender Anruf…', true);
+  try{ navigator.vibrate && navigator.vibrate([400,200,400,200,400]); }catch{}
+  call.noAnswer = setTimeout(()=>{ if(call && !call.stream) endCall(true); }, 45000);
+}
+async function acceptCall(){
+  if(!call || !call.incoming || call.stream) return;
+  try{ call.stream = await getMic(); }catch{ toast('Kein Zugriff aufs Mikrofon'); endCall(true); return; }
+  call.mc.answer(call.stream); bindCall(call.mc);
+  $('#callAccept').style.display='none'; $('#callMute').style.display=''; $('#callStatus').textContent='Verbinde…';
+}
+function bindCall(mc){
+  mc.on('stream', rs => {
+    if(!call || call.start) return;
+    const a = $('#remoteAudio'); a.srcObject = rs; a.play().catch(()=>{});
+    call.start = Date.now(); clearTimeout(call.noAnswer);
+    $('#callStatus').textContent = 'Verbunden'; $('#callSec').textContent = '🔄 prüfe Verschlüsselung…';
+    call.tick = setInterval(()=>{ if(call) $('#callStatus').textContent = 'Verbunden · '+fmtDur((Date.now()-call.start)/1000); }, 1000);
+    // DTLS-Fingerabdruck über den verschlüsselten Kanal abgleichen -> kein Mithören über den Vermittlungsserver
+    sendCallFp(mc);
+    checkCallFp();
+  });
+  mc.on('close', ()=>{ if(call && call.mc===mc) endCall(false); });
+  mc.on('error', ()=>{ if(call && call.mc===mc) endCall(false); });
+}
+async function sendCallFp(mc){
+  const pc = mc.peerConnection; let fp = null;
+  for(let i=0; i<100 && !(fp = sdpFp(pc.localDescription && pc.localDescription.sdp)); i++) await sleep(50);
+  const st = call && sessions.get(call.peer);
+  if(st && call.mc===mc) sendEnc(st, {k:'call-fp', fp}).catch(()=>{});
+}
+function checkCallFp(){
+  if(!call || !call.start || !call.theirFp || call.verified) return;
+  const pc = call.mc.peerConnection, remote = sdpFp(pc.remoteDescription && pc.remoteDescription.sdp);
+  if(remote && remote === call.theirFp){ call.verified = true; $('#callSec').textContent = '🔒 Ende-zu-Ende verschlüsselt · geprüft'; }
+  else { toast('⚠️ Schlüssel des Anrufs stimmt nicht überein – Anruf aus Sicherheitsgründen beendet', 7000); endCall(true); }
+}
+function endCall(notify){
+  if(!call) return; const c = call; call = null;
+  clearTimeout(c.noAnswer); clearInterval(c.tick);
+  const st = sessions.get(c.peer);
+  if(notify && st && st.ready) sendEnc(st, {k:'call-end'}).catch(()=>{});
+  try{ c.mc.close(); }catch{}
+  if(c.stream) c.stream.getTracks().forEach(t=>t.stop());
+  $('#remoteAudio').srcObject = null; $('#call').classList.remove('on');
+  const dur = c.start ? fmtDur((Date.now()-c.start)/1000) : null;
+  const m = {id:rid(), cid:c.peer, dir:'sys', ts:Date.now(), kind:'call', text:(c.incoming?'Eingehender':'Ausgehender')+' Anruf'+(dur?' · '+dur:' · nicht verbunden'), status:'local'};
+  addLocal(m); saveMsg(m); if(cur===c.peer) appendMsg(m); renderContacts();
+}
+function showCall(status, incoming){
+  const ct = contacts.get(call.peer);
+  $('#callName').textContent = ct ? ct.name : call.peer; $('#callAv').textContent = (ct?ct.name:'?')[0].toUpperCase();
+  $('#callStatus').textContent = status; $('#callSec').textContent = '';
+  $('#callAccept').style.display = incoming ? '' : 'none'; $('#callMute').style.display = incoming ? 'none' : '';
+  $('#callMute').textContent = '🎙️'; $('#call').classList.add('on');
+}
+
+/* ---------------- Darstellung ---------------- */
+function refreshPresence(cid){ renderContacts(); if(cur===cid) renderChatHead(); }
+const isOnline = cid => { const s=sessions.get(cid); return !!(s && s.ready); };
+function preview(m){ return m.kind==='text'? m.text : m.kind==='voice'? '🎤 Sprachnachricht' : m.kind==='call'? '📞 '+m.text : '📎 '+m.name; }
+function unread(c){ return (msgs.get(c.id)||[]).filter(m=>m.dir==='in' && m.ts>(c.lastRead||0)).length; }
+function renderContacts(){
+  const list = [...contacts.values()].filter(c=>c.status!=='blocked');
+  const last = c => { const a=msgs.get(c.id); return a&&a.length ? a[a.length-1] : null; };
+  list.sort((a,b)=>((last(b)||{}).ts||0)-((last(a)||{}).ts||0));
+  $('#clist').innerHTML = list.length ? list.map(c=>{ const l=last(c), u=unread(c);
+    return `<div class="contact" data-id="${c.id}"><div class="av">${esc(c.name[0].toUpperCase())}<span class="dot ${isOnline(c.id)?'on':''}"></span></div>
+    <div class="grow"><div class="cname">${esc(c.name)}</div><div class="cprev">${l?esc(preview(l)):'<i>noch keine Nachrichten</i>'}</div></div>
+    ${c.status==='request'?'<span class="badge req">Anfrage</span>':u?`<span class="badge">${u}</span>`:''}</div>`; }).join('')
+    : '<div class="empty">Noch keine Kontakte. Schick jemandem deinen Einladungslink oder füge seine ID oben ein.</div>';
+}
+function renderChatHead(){
+  const c = contacts.get(cur); if(!c) return;
+  $('#chatName').textContent = c.name;
+  $('#chatDot').classList.toggle('on', isOnline(cur));
+  $('#chatState').textContent = c.status==='request' ? 'Kontaktanfrage' : isOnline(cur) ? 'online · verschlüsselt' : 'offline – Nachrichten werden zugestellt, sobald beide online sind';
+  $('#reqBanner').style.display = c.status==='request' ? '' : 'none';
+}
+const blobUrls = new Map();
+async function blobUrl(m){ if(blobUrls.has(m.id)) return blobUrls.get(m.id); const b=await loadBlob(m.id); if(!b) return null; const u=URL.createObjectURL(new Blob([b],{type:m.mime||'application/octet-stream'})); blobUrls.set(m.id,u); return u; }
+const statusIcon = m => m.dir!=='out' ? '' : m.status==='pending' ? ' 🕓' : m.status==='sent' ? ' ✓' : ' ✓✓';
+function msgHtml(m){
+  if(m.dir==='sys') return esc(preview(m))+' · '+fmtTime(m.ts);
+  let body = m.kind==='text' ? esc(m.text) : m.kind==='voice' ? '<audio controls preload="metadata"></audio>' :
+    (m.mime||'').startsWith('image/') ? `<img alt="${esc(m.name)}"><a class="file" download="${esc(m.name)}"><span>⬇️</span><b>${esc(m.name)}</b></a>` :
+    `<a class="file" download="${esc(m.name)}"><span style="font-size:24px">📄</span><span><b>${esc(m.name)}</b><br><span class="small">${fmtSize(m.size)}</span></span></a>`;
+  return body + `<div class="meta"><span class="prog"></span>${fmtTime(m.ts)}${statusIcon(m)}</div>`;
+}
+async function fillMedia(el, m){
+  if(m.kind==='text' || m.dir==='sys') return;
+  const u = await blobUrl(m); if(!u) return;
+  el.querySelectorAll('audio,img').forEach(x=>x.src=u); el.querySelectorAll('a.file').forEach(x=>x.href=u);
+}
+function msgEl(m){ const d=document.createElement('div'); d.className='m '+(m.dir==='out'?'out':m.dir==='sys'?'sys':''); d.id='m-'+m.id; d.innerHTML=msgHtml(m); fillMedia(d,m); return d; }
+function appendMsg(m){ const box=$('#msgs'); const sc=$('#msgScroll'); const atEnd = sc.scrollHeight-sc.scrollTop-sc.clientHeight < 80;
+  box.appendChild(msgEl(m)); if(atEnd || m.dir==='out') sc.scrollTop = sc.scrollHeight; }
+function updateMsgEl(m){ const e=document.getElementById('m-'+m.id); if(e){ const meta=e.querySelector('.meta'); if(meta) meta.innerHTML=`<span class="prog"></span>${fmtTime(m.ts)}${statusIcon(m)}`; } renderContacts(); }
+function setProgress(m, f){ const e=document.querySelector('#m-'+m.id+' .prog'); if(e) e.textContent = f==null ? '' : Math.round(f*100)+'% · '; }
+async function onNewIn(m){
+  const c = contacts.get(m.cid);
+  if(cur===m.cid && $('#vChat').classList.contains('on') && !document.hidden){ appendMsg(m); c.lastRead=m.ts; await saveContact(c); }
+  else { try{ navigator.vibrate && navigator.vibrate(120); }catch{} }
+  renderContacts();
+}
+async function openChat(cid){
+  cur = cid; const c = contacts.get(cid);
+  const box = $('#msgs'); box.innerHTML='';
+  const list = msgs.get(cid)||[];
+  if(!list.length) box.innerHTML = '<div class="empty">🔒 Nachrichten in diesem Chat sind Ende-zu-Ende verschlüsselt. Nur ihr beide könnt sie lesen.</div>';
+  list.forEach(m=>box.appendChild(msgEl(m)));
+  c.lastRead = Date.now(); await saveContact(c);
+  renderChatHead(); show('vChat'); $('#msgScroll').scrollTop = 1e9;
+  if(c.status==='ok') connectTo(cid);
+}
+async function openInfo(){
+  const c = contacts.get(cur);
+  $('#infName').value = c.name; $('#infId').textContent = fmtId(c.id);
+  $('#infSafety').textContent = c.pub ? await safetyNumber(me.pubRaw, c.pub) : 'Erst nach der ersten Verbindung verfügbar';
+  $('#infBlock').textContent = c.status==='blocked' ? 'Freigeben' : 'Blockieren';
+  show('vInfo');
+}
+function autoGrow(){ const t=$('#txt'); t.style.height='auto'; t.style.height=Math.min(t.scrollHeight,120)+'px'; }
+function toggleSend(){ const has=!!$('#txt').value.trim(); $('#sendBtn').style.display=has?'':'none'; $('#micBtn').style.display=has?'none':''; }
+async function copy(t, ok){ try{ await navigator.clipboard.writeText(t); toast(ok); }catch{ await ask('Kopieren nicht möglich – bitte markieren:<div class="idbox" style="user-select:all">'+esc(t)+'</div>'); } }
+const inviteLink = () => location.href.split('#')[0] + '#add-' + me.id;
+
+/* ---------------- Start ---------------- */
+async function afterUnlock(){
+  await loadData();
+  $('#myId').textContent = fmtId(me.id);
+  renderContacts(); show('vMain'); startPeer();
+  const h = location.hash;
+  if(h.startsWith('#add-')){ $('#addId').value = h.slice(5); $('#addName').focus(); toast('Gib dem Kontakt einen Namen und tippe „Hinzufügen"'); history.replaceState(null,'',location.pathname+location.search); }
+}
+async function wipe(){
+  if(!await ask('<b>Alle Daten löschen?</b><br>Schlüssel, Kontakte und Nachrichten auf diesem Gerät werden unwiderruflich gelöscht. Deine ID ist danach weg.','Löschen')) return;
+  try{ peer && peer.destroy(); }catch{} DB.close();
+  await new Promise(r=>{ const q=indexedDB.deleteDatabase('funkstille'); q.onsuccess=q.onerror=q.onblocked=()=>r(); });
+  try{ localStorage.removeItem('fs-settings'); }catch{}
+  location.reload();
+}
+
+$('#setBtn').onclick = async () => {
+  const a=$('#setPw1').value, b=$('#setPw2').value;
+  if(a.length<10) return $('#setErr').textContent='Mindestens 10 Zeichen.';
+  if(a!==b) return $('#setErr').textContent='Passwörter stimmen nicht überein.';
+  $('#setBtn').disabled=true; $('#setBtn').textContent='Erzeuge Schlüssel…';
+  try{ await createIdentity(a); $('#setPw1').value=$('#setPw2').value=''; await afterUnlock(); }
+  catch(e){ $('#setErr').textContent='Fehler: '+e.message; $('#setBtn').disabled=false; $('#setBtn').textContent='Schlüssel erzeugen'; }
+};
+async function doUnlock(){
+  $('#unBtn').disabled=true; $('#unBtn').textContent='Entschlüssele…'; $('#unErr').textContent='';
+  try{ await unlockIdentity($('#unPw').value); $('#unPw').value=''; await afterUnlock(); }
+  catch{ $('#unErr').textContent='Falsches Passwort.'; }
+  $('#unBtn').disabled=false; $('#unBtn').textContent='Entsperren';
+}
+$('#unBtn').onclick = doUnlock;
+$('#unPw').onkeydown = e => { if(e.key==='Enter') doUnlock(); };
+$('#wipeBtn1').onclick = $('#wipeBtn2').onclick = wipe;
+$('#lockBtn').onclick = () => location.reload(); // Schlüssel liegen nur im Arbeitsspeicher
+$('#copyId').onclick = () => copy(me.id, 'ID kopiert');
+$('#copyLink').onclick = () => copy(inviteLink(), 'Einladungslink kopiert – schick ihn deinem Kontakt');
+$('#addBtn').onclick = async () => {
+  const id = normId($('#addId').value), name = $('#addName').value.trim();
+  if(!/^fs[0-9a-f]{32}$/.test(id)) return toast('Ungültige ID');
+  if(id===me.id) return toast('Das ist deine eigene ID');
+  if(!name) return toast('Bitte Namen eingeben');
+  const c = contacts.get(id) || {id, pub:null, lastRead:0};
+  c.name = name; c.status = 'ok'; await saveContact(c);
+  $('#addId').value=$('#addName').value=''; renderContacts(); connectTo(id); openChat(id);
+};
+$('#clist').onclick = e => { const d=e.target.closest('.contact'); if(d) openChat(d.dataset.id); };
+$('#backBtn').onclick = () => { cur=null; renderContacts(); show('vMain'); };
+$('#chatHead').onclick = $('#infoBtn').onclick = openInfo;
+$('#infoBack').onclick = () => openChat(cur);
+$('#infSave').onclick = async () => { const c=contacts.get(cur); const n=$('#infName').value.trim(); if(n){ c.name=n; await saveContact(c); toast('Gespeichert'); } };
+$('#infBlock').onclick = async () => { const c=contacts.get(cur);
+  if(c.status==='blocked'){ c.status='ok'; await saveContact(c); toast('Freigegeben'); connectTo(c.id); return openInfo(); }
+  if(!await ask('Kontakt blockieren? Er kann dich dann nicht mehr erreichen.','Blockieren')) return;
+  c.status='blocked'; await saveContact(c); const s=sessions.get(c.id); if(s) s.conn.close(); cur=null; renderContacts(); show('vMain'); };
+$('#infDel').onclick = async () => { const c=contacts.get(cur);
+  if(!await ask('Kontakt <b>'+esc(c.name)+'</b> und den gesamten Verlauf löschen?','Löschen')) return;
+  for(const m of (msgs.get(c.id)||[])){ await iDel('messages',m.id); await iDel('blobs',m.id); msgIdx.delete(m.id); }
+  msgs.delete(c.id); contacts.delete(c.id); await iDel('contacts',c.id);
+  const s=sessions.get(c.id); if(s) s.conn.close(); cur=null; renderContacts(); show('vMain'); };
+$('#reqOk').onclick = async () => { const c=contacts.get(cur); c.status='ok'; await saveContact(c); renderChatHead(); flush(cur); toast('Angenommen – tipp oben auf den Namen, um ihn umzubenennen'); };
+$('#reqNo').onclick = async () => { const c=contacts.get(cur); c.status='blocked'; await saveContact(c); const s=sessions.get(c.id); if(s) s.conn.close(); cur=null; renderContacts(); show('vMain'); };
+$('#txt').oninput = () => { autoGrow(); toggleSend(); };
+$('#txt').onkeydown = e => { if(e.key==='Enter' && !e.shiftKey && !('ontouchstart' in window)){ e.preventDefault(); sendText(); } };
+$('#sendBtn').onclick = sendText;
+$('#attBtn').onclick = () => { if(contacts.get(cur).status!=='ok') return toast('Erst Kontakt annehmen'); $('#fileIn').click(); };
+$('#fileIn').onchange = async e => { for(const f of e.target.files) await queueFile(cur, f, f.name, false); e.target.value=''; };
+$('#micBtn').onclick = () => { if(contacts.get(cur).status!=='ok') return toast('Erst Kontakt annehmen'); startRec(); };
+$('#recSend').onclick = () => stopRec(true);
+$('#recCancel').onclick = () => stopRec(false);
+$('#callBtn').onclick = () => startCall(cur);
+$('#callAccept').onclick = acceptCall;
+$('#callEnd').onclick = () => endCall(true);
+$('#callMute').onclick = () => { if(!call||!call.stream) return; const t=call.stream.getAudioTracks()[0]; t.enabled=!t.enabled; $('#callMute').textContent = t.enabled?'🎙️':'🔇'; };
+$('#setOpen').onclick = () => { const s=settings(); $('#sHost').value=s.host||''; $('#sPort').value=s.port||''; $('#sPath').value=s.path||''; $('#sKey').value=s.key||''; $('#sSecure').checked=s.secure!==false; $('#sIce').value=s.ice||''; show('vSet'); };
+$('#setBack').onclick = () => show('vMain');
+$('#sSave').onclick = () => {
+  const ice=$('#sIce').value.trim(); if(ice){ try{ JSON.parse(ice); }catch{ return toast('ICE-JSON ist ungültig'); } }
+  lsSet('fs-settings', {host:$('#sHost').value.trim(), port:$('#sPort').value.trim(), path:$('#sPath').value.trim(), key:$('#sKey').value.trim(), secure:$('#sSecure').checked, ice});
+  setNet(false); startPeer(); show('vMain'); toast('Gespeichert – verbinde neu');
+};
+$('#pwBtn').onclick = async () => {
+  const o=$('#pwOld').value, n=$('#pwNew').value; if(n.length<10) return toast('Neues Passwort: mindestens 10 Zeichen');
+  $('#pwBtn').disabled=true; $('#pwBtn').textContent='Verschlüssele neu…';
+  try{ await changePassword(o,n); $('#pwOld').value=$('#pwNew').value=''; toast('Passwort geändert'); }catch{ toast('Altes Passwort falsch'); }
+  $('#pwBtn').disabled=false; $('#pwBtn').textContent='Passwort ändern';
+};
+document.addEventListener('visibilitychange', async () => { if(!document.hidden && cur && $('#vChat').classList.contains('on')){ const c=contacts.get(cur); c.lastRead=Date.now(); await saveContact(c); renderContacts(); } });
+
+(async () => {
+  if(!window.isSecureContext || !crypto.subtle){ document.body.innerHTML='<div class="center"><h1>Sichere Verbindung nötig</h1><p class="sub">Funkstille muss über https:// geöffnet werden.</p></div>'; return; }
+  if(typeof Peer==='undefined'){ toast('Netzwerkbibliothek konnte nicht geladen werden – Internet prüfen', 8000); }
+  try{ DB = await idbOpen(); }catch{ document.body.innerHTML='<div class="center"><h1>Speicher nicht verfügbar</h1><p class="sub">Bitte nicht im privaten Modus öffnen.</p></div>'; return; }
+  show(await iGet('meta','identity') ? 'vUnlock' : 'vSetup');
+})();
+</script>
+</body>
+</html>
