@@ -7,6 +7,8 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <title>Funkstille – verschlüsselte Kommunikation</title>
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.min.js"></script>
 <style>
 :root{--bg:#0e1116;--panel:#161b22;--panel2:#1f2630;--line:#2b3440;--txt:#e6edf3;--mut:#8b98a8;--acc:#2fbf9f;--acc2:#1e8f77;--warn:#e5a50a;--err:#e5534b;--out:#1d4d43;--in:#222a35}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -83,6 +85,11 @@ header .s{font-size:12px;color:var(--mut)}
 #dlg .row{justify-content:flex-end;margin-top:16px}
 .safety{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:20px;letter-spacing:1px;text-align:center;line-height:1.7;background:var(--panel2);border-radius:10px;padding:10px}
 .small{font-size:12px;color:var(--mut)}
+#qrBox{display:flex;justify-content:center;padding:14px;background:#fff;border-radius:12px;margin:10px auto;width:fit-content}
+#qrBox img,#qrBox canvas{display:block}
+#vScan video{width:100%;max-height:60vh;object-fit:cover;background:#000;border-radius:12px}
+.scanhint{text-align:center;color:var(--mut);font-size:14px;margin:10px}
+.verified{color:var(--acc);font-weight:600}
 hr{border:0;border-top:1px solid var(--line);margin:16px 0}
 </style>
 </head>
@@ -97,6 +104,7 @@ hr{border:0;border-top:1px solid var(--line);margin:16px 0}
   <input type="password" id="setPw1" autocomplete="new-password" placeholder="mindestens 10 Zeichen">
   <label>Passwort wiederholen</label>
   <input type="password" id="setPw2" autocomplete="new-password">
+  <label style="display:flex;gap:8px;align-items:center;color:var(--txt);font-size:14px"><input type="checkbox" id="setStay" style="width:auto" checked> Auf diesem Gerät angemeldet bleiben</label>
   <div class="err" id="setErr"></div>
   <button class="pri" style="width:100%" id="setBtn">Schlüssel erzeugen</button>
   <div class="note">Beim Einrichten wird auf diesem Gerät ein privater Schlüssel erzeugt. Er verlässt das Gerät nie und wird mit deinem Passwort verschlüsselt gespeichert. <b>Ohne Passwort gibt es keinen Zugang – auch keine Wiederherstellung.</b></div>
@@ -108,8 +116,10 @@ hr{border:0;border-top:1px solid var(--line);margin:16px 0}
   <h1>Funkstille</h1>
   <div class="sub">Gesperrt. Passwort eingeben zum Entschlüsseln.</div>
   <input type="password" id="unPw" autocomplete="current-password" placeholder="Passwort">
+  <label style="display:flex;gap:8px;align-items:center;color:var(--txt);font-size:14px"><input type="checkbox" id="unStay" style="width:auto" checked> Auf diesem Gerät angemeldet bleiben</label>
   <div class="err" id="unErr"></div>
   <button class="pri" style="width:100%" id="unBtn">Entsperren</button>
+  <div class="note">„Angemeldet bleiben" legt den Entsperr-Schlüssel geschützt im Browser dieses Geräts ab. Dann öffnet sich die App ohne Passwort – wer dein entsperrtes Handy hat, kommt also an die App. Mit 🔒 oben rechts sperrst du sie jederzeit wieder.</div>
   <div style="text-align:center;margin-top:30px"><button class="dan" id="wipeBtn1">Alle Daten auf diesem Gerät löschen</button></div>
 </div></div></section>
 
@@ -127,6 +137,10 @@ hr{border:0;border-top:1px solid var(--line);margin:16px 0}
       <div class="row">
         <button class="grow" id="copyId">ID kopieren</button>
         <button class="grow" id="copyLink">Einladungslink</button>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <button class="grow pri" id="showQr">Meinen QR-Code zeigen</button>
+        <button class="grow" id="scanAdd">QR scannen</button>
       </div>
     </div>
     <div class="card">
@@ -170,7 +184,10 @@ hr{border:0;border-top:1px solid var(--line);margin:16px 0}
     <div class="idbox" id="infId"></div>
     <label>Sicherheitsnummer</label>
     <div class="safety" id="infSafety"></div>
-    <div class="small" style="margin-top:8px">Vergleicht diese Nummer persönlich oder am Telefon. Stimmt sie auf beiden Geräten überein, spricht niemand dazwischen.</div>
+    <div class="small" style="margin-top:8px" id="infVerified"></div>
+    <div id="infQr"></div>
+    <div class="row" style="margin-top:8px"><button class="grow" id="infShowQr">Als QR-Code zeigen</button><button class="grow pri" id="infScanQr">Code des Kontakts scannen</button></div>
+    <div class="small" style="margin-top:8px">Vergleicht diese Nummer persönlich: Einer zeigt seinen QR-Code, der andere scannt ihn. Stimmt sie überein, spricht niemand dazwischen.</div>
     <hr>
     <div class="row"><button class="dan grow" id="infBlock">Blockieren</button><button class="dan grow" id="infDel">Kontakt löschen</button></div>
   </div></div>
@@ -190,6 +207,10 @@ hr{border:0;border-top:1px solid var(--line);margin:16px 0}
     <div class="small" style="margin-top:6px">Ein eigener TURN-Server hilft, wenn Anrufe im Mobilfunknetz nicht zustande kommen. Auch über TURN bleibt alles verschlüsselt.</div>
     <button class="pri" style="width:100%;margin-top:12px" id="sSave">Speichern &amp; neu verbinden</button>
     <hr>
+    <label>Anmeldung</label>
+    <div class="small" id="stayState"></div>
+    <button style="width:100%;margin-top:8px" id="stayOff">Angemeldet bleiben ausschalten</button>
+    <hr>
     <label>Passwort ändern</label>
     <input type="password" id="pwOld" placeholder="Altes Passwort">
     <input type="password" id="pwNew" placeholder="Neues Passwort (min. 10 Zeichen)" style="margin-top:8px">
@@ -197,6 +218,27 @@ hr{border:0;border-top:1px solid var(--line);margin:16px 0}
     <hr>
     <button class="dan" style="width:100%" id="wipeBtn2">Alle Daten auf diesem Gerät löschen</button>
   </div></div>
+</section>
+
+<!-- QR anzeigen -->
+<section class="view" id="vQr">
+  <header><button class="ico" id="qrBack">←</button><div class="t grow" id="qrTitle">Mein QR-Code</div></header>
+  <div class="scroll"><div class="card" style="text-align:center">
+    <div id="qrBox"></div>
+    <div class="small" id="qrSub"></div>
+  </div></div>
+</section>
+
+<!-- QR scannen -->
+<section class="view" id="vScan">
+  <header><button class="ico" id="scanBack">←</button><div class="t grow" id="scanTitle">QR-Code scannen</div></header>
+  <div class="scroll" style="padding:12px">
+    <video id="scanVideo" playsinline muted></video>
+    <canvas id="scanCanvas" hidden></canvas>
+    <div class="scanhint" id="scanHint">Kamera wird gestartet…</div>
+    <input type="file" id="scanFile" accept="image/*" capture="environment" hidden>
+    <button style="width:100%" id="scanPick">Stattdessen Foto des Codes auswählen</button>
+  </div>
 </section>
 
 <!-- Anruf -->
@@ -299,6 +341,19 @@ async function unlockIdentity(pw){
   const pk = await unseal(v, m.box); // wirft bei falschem Passwort
   vault = v; me = {id:m.id, pubRaw:m.pubRaw, priv: await importPriv(pk)}; pk.fill(0);
 }
+// „Angemeldet bleiben": nicht-exportierbaren Tresorschlüssel im Browser ablegen
+async function rememberVault(on){
+  if(!on){ await iDel('meta','stay'); return; }
+  try{ await iPut('meta','stay', vault); }catch(e){ console.warn('stay', e); toast('„Angemeldet bleiben" wird von diesem Browser nicht unterstützt'); }
+}
+async function tryAutoUnlock(){
+  try{
+    const k = await iGet('meta','stay'); if(!k) return false;
+    const m = await iGet('meta','identity');
+    const pk = await unseal(k, m.box); vault = k; me = {id:m.id, pubRaw:m.pubRaw, priv: await importPriv(pk)}; pk.fill(0);
+    return true;
+  }catch(e){ console.warn('autounlock', e); await iDel('meta','stay').catch(()=>{}); return false; }
+}
 async function changePassword(oldPw, newPw){
   const m = await iGet('meta','identity');
   const oldV = await deriveVault(oldPw, m.salt);
@@ -308,7 +363,7 @@ async function changePassword(oldPw, newPw){
   // alle gespeicherten Daten mit neuem Schlüssel neu verschlüsseln
   for(const s of ['contacts','messages','blobs']) for(const [k,b] of await iAll(s)) await iPut(s, k, await seal(newV, await unseal(oldV, b)));
   await iPut('meta','identity',{...m, salt, box: await seal(newV, pk)}); pk.fill(0);
-  vault = newV;
+  vault = newV; if(await iGet('meta','stay')) await rememberVault(true);
 }
 async function safetyNumber(pubA, pubB){
   const k = v => typeof v==='string' ? v : b64(v);
@@ -612,7 +667,7 @@ function renderChatHead(){
   const c = contacts.get(cur); if(!c) return;
   $('#chatName').textContent = c.name;
   $('#chatDot').classList.toggle('on', isOnline(cur));
-  $('#chatState').textContent = c.status==='request' ? 'Kontaktanfrage' : isOnline(cur) ? 'online · verschlüsselt' : 'offline – Nachrichten werden zugestellt, sobald beide online sind';
+  $('#chatState').textContent = c.status==='request' ? 'Kontaktanfrage' : isOnline(cur) ? (c.verified ? 'online · verschlüsselt · ✅ verifiziert' : 'online · verschlüsselt') : 'offline – Nachrichten werden zugestellt, sobald beide online sind';
   $('#reqBanner').style.display = c.status==='request' ? '' : 'none';
 }
 const blobUrls = new Map();
@@ -655,13 +710,91 @@ async function openInfo(){
   const c = contacts.get(cur);
   $('#infName').value = c.name; $('#infId').textContent = fmtId(c.id);
   $('#infSafety').textContent = c.pub ? await safetyNumber(me.pubRaw, c.pub) : 'Erst nach der ersten Verbindung verfügbar';
+  $('#infVerified').innerHTML = c.verified ? '<span class="verified">✅ Verifiziert – Sicherheitsnummer wurde per Scan bestätigt</span>' : 'Noch nicht verifiziert';
+  $('#infShowQr').disabled = $('#infScanQr').disabled = !c.pub;
   $('#infBlock').textContent = c.status==='blocked' ? 'Freigeben' : 'Blockieren';
   show('vInfo');
 }
 function autoGrow(){ const t=$('#txt'); t.style.height='auto'; t.style.height=Math.min(t.scrollHeight,120)+'px'; }
 function toggleSend(){ const has=!!$('#txt').value.trim(); $('#sendBtn').style.display=has?'':'none'; $('#micBtn').style.display=has?'none':''; }
 async function copy(t, ok){ try{ await navigator.clipboard.writeText(t); toast(ok); }catch{ await ask('Kopieren nicht möglich – bitte markieren:<div class="idbox" style="user-select:all">'+esc(t)+'</div>'); } }
-const inviteLink = () => location.href.split('#')[0] + '#add-' + me.id;
+const b64url = s => s.replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+const unb64url = s => { s = s.replace(/-/g,'+').replace(/_/g,'/'); return s + '='.repeat((4 - s.length % 4) % 4); };
+const inviteLink = () => location.href.split('#')[0] + '#add-' + me.id + '.' + b64url(b64(me.pubRaw));
+// Einladung (Link oder QR-Inhalt) auslesen: ID + optional öffentlicher Schlüssel
+async function parseInvite(text){
+  const m = String(text).match(/#?add-(fs[0-9a-f]{32})(?:\.([A-Za-z0-9_-]{80,100}))?/);
+  if(!m) return null;
+  const inv = {id:m[1], pub:null};
+  if(m[2]){ const pub = unb64url(m[2]); try{ if(await idFromPub(unb64(pub)) !== inv.id) return null; inv.pub = pub; }catch{ return null; } }
+  return inv;
+}
+async function addContactFromInvite(inv, name){
+  if(inv.id===me.id) return toast('Das ist deine eigene ID');
+  const c = contacts.get(inv.id) || {id:inv.id, pub:null, lastRead:0};
+  if(c.pub && inv.pub && c.pub !== inv.pub) return toast('⚠️ Dieser Code passt nicht zum gespeicherten Schlüssel des Kontakts!', 7000);
+  c.name = name; c.status = 'ok'; if(inv.pub) c.pub = inv.pub;
+  await saveContact(c); renderContacts(); connectTo(inv.id); openChat(inv.id);
+}
+
+/* ---------------- QR-Code anzeigen / scannen ---------------- */
+let qrFrom = 'vMain';
+function showQr(text, title, sub, from){
+  qrFrom = from; $('#qrTitle').textContent = title; $('#qrSub').textContent = sub;
+  const box = $('#qrBox'); box.innerHTML = '';
+  if(typeof QRCode === 'undefined'){ box.innerHTML = '<div style="color:#000;padding:10px">QR-Bibliothek nicht geladen</div>'; }
+  else new QRCode(box, {text, width:Math.min(260, innerWidth-90), height:Math.min(260, innerWidth-90), correctLevel:QRCode.CorrectLevel.M});
+  show('vQr');
+}
+let scan = null; // {stream, raf, onResult, from}
+async function startScan(title, onResult, from){
+  stopScan(); scan = {onResult, from};
+  $('#scanTitle').textContent = title; $('#scanHint').textContent = 'Kamera wird gestartet…'; show('vScan');
+  if(typeof jsQR === 'undefined'){ $('#scanHint').textContent = 'Scanner-Bibliothek nicht geladen – Internet prüfen.'; return; }
+  const v = $('#scanVideo'), cv = $('#scanCanvas'), ctx = cv.getContext('2d', {willReadFrequently:true});
+  const my = scan; let stream;
+  try{ stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment', width:{ideal:1280}, height:{ideal:720}}}); }
+  catch{ if(scan===my) $('#scanHint').textContent = 'Kein Kamerazugriff. Wähle unten ein Foto des Codes aus.'; return; }
+  if(scan!==my){ stream.getTracks().forEach(t=>t.stop()); return; } // inzwischen abgebrochen
+  scan.stream = stream; v.srcObject = stream; await v.play().catch(()=>{});
+  $('#scanHint').textContent = 'Halte den QR-Code ins Bild.';
+  const loop = () => {
+    if(!scan) return;
+    if(v.readyState >= 2){
+      cv.width = v.videoWidth; cv.height = v.videoHeight; ctx.drawImage(v, 0, 0);
+      const code = jsQR(ctx.getImageData(0,0,cv.width,cv.height).data, cv.width, cv.height, {inversionAttempts:'dontInvert'});
+      if(code && code.data){ const cb = scan.onResult; stopScan(); try{ navigator.vibrate && navigator.vibrate(80); }catch{} cb(code.data); return; }
+    }
+    if(scan===my) scan.raf = requestAnimationFrame(loop);
+  };
+  if(scan===my) scan.raf = requestAnimationFrame(loop);
+}
+function stopScan(){ if(!scan) return; const s = scan; scan = null; cancelAnimationFrame(s.raf); if(s.stream) s.stream.getTracks().forEach(t=>t.stop()); $('#scanVideo').srcObject = null; }
+async function scanFromFile(file){
+  if(!scan) return; const cb = scan.onResult, from = scan.from;
+  const img = new Image(); img.src = URL.createObjectURL(file); await img.decode().catch(()=>{});
+  const cv = $('#scanCanvas'), ctx = cv.getContext('2d'); const sc = Math.min(1, 1600/Math.max(img.width,img.height));
+  cv.width = img.width*sc; cv.height = img.height*sc; ctx.drawImage(img,0,0,cv.width,cv.height); URL.revokeObjectURL(img.src);
+  const code = typeof jsQR !== 'undefined' && jsQR(ctx.getImageData(0,0,cv.width,cv.height).data, cv.width, cv.height);
+  if(code && code.data){ stopScan(); cb(code.data); } else toast('Kein QR-Code im Bild gefunden');
+}
+async function onAddScan(text){
+  const inv = await parseInvite(text);
+  if(!inv){ toast('Das ist kein Funkstille-Code'); return show('vMain'); }
+  show('vMain'); $('#addId').value = inv.id; pendingPub = inv.pub;
+  const ex = contacts.get(inv.id);
+  if(ex && ex.status==='ok'){ if(inv.pub && ex.pub && ex.pub!==inv.pub) return toast('⚠️ Code passt nicht zum gespeicherten Schlüssel!',7000); if(inv.pub && !ex.pub){ ex.pub=inv.pub; await saveContact(ex); } return openChat(inv.id); }
+  $('#addName').focus(); toast(inv.pub ? 'Code erkannt (mit Schlüssel). Namen eingeben und „Hinzufügen" tippen.' : 'ID erkannt. Namen eingeben und „Hinzufügen" tippen.', 5000);
+}
+let pendingPub = null;
+const safetyPayload = sn => 'funkstille:verify:' + sn.replace(/\s/g,'');
+async function onVerifyScan(text){
+  const c = contacts.get(cur); const mine = c && c.pub ? safetyPayload(await safetyNumber(me.pubRaw, c.pub)) : null;
+  if(!String(text).startsWith('funkstille:verify:')) toast('Das ist kein Sicherheits-Code');
+  else if(text === mine){ c.verified = true; await saveContact(c); toast('✅ Sicherheitsnummer stimmt überein – Kontakt verifiziert', 5000); }
+  else toast('⚠️ Sicherheitsnummer stimmt NICHT überein! Möglicherweise hört jemand mit – nicht weiter kommunizieren.', 9000);
+  openInfo();
+}
 
 /* ---------------- Start ---------------- */
 async function afterUnlock(){
@@ -669,7 +802,7 @@ async function afterUnlock(){
   $('#myId').textContent = fmtId(me.id);
   renderContacts(); show('vMain'); startPeer();
   const h = location.hash;
-  if(h.startsWith('#add-')){ $('#addId').value = h.slice(5); $('#addName').focus(); toast('Gib dem Kontakt einen Namen und tippe „Hinzufügen"'); history.replaceState(null,'',location.pathname+location.search); }
+  if(h.startsWith('#add-')){ history.replaceState(null,'',location.pathname+location.search); const inv = await parseInvite(h); if(inv) onAddScan(h); else toast('Einladungslink ungültig'); }
 }
 async function wipe(){
   if(!await ask('<b>Alle Daten löschen?</b><br>Schlüssel, Kontakte und Nachrichten auf diesem Gerät werden unwiderruflich gelöscht. Deine ID ist danach weg.','Löschen')) return;
@@ -684,30 +817,30 @@ $('#setBtn').onclick = async () => {
   if(a.length<10) return $('#setErr').textContent='Mindestens 10 Zeichen.';
   if(a!==b) return $('#setErr').textContent='Passwörter stimmen nicht überein.';
   $('#setBtn').disabled=true; $('#setBtn').textContent='Erzeuge Schlüssel…';
-  try{ await createIdentity(a); $('#setPw1').value=$('#setPw2').value=''; await afterUnlock(); }
+  try{ await createIdentity(a); await rememberVault($('#setStay').checked); $('#setPw1').value=$('#setPw2').value=''; await afterUnlock(); }
   catch(e){ $('#setErr').textContent='Fehler: '+e.message; $('#setBtn').disabled=false; $('#setBtn').textContent='Schlüssel erzeugen'; }
 };
 async function doUnlock(){
   $('#unBtn').disabled=true; $('#unBtn').textContent='Entschlüssele…'; $('#unErr').textContent='';
-  try{ await unlockIdentity($('#unPw').value); $('#unPw').value=''; await afterUnlock(); }
+  try{ await unlockIdentity($('#unPw').value); await rememberVault($('#unStay').checked); $('#unPw').value=''; await afterUnlock(); }
   catch{ $('#unErr').textContent='Falsches Passwort.'; }
   $('#unBtn').disabled=false; $('#unBtn').textContent='Entsperren';
 }
 $('#unBtn').onclick = doUnlock;
 $('#unPw').onkeydown = e => { if(e.key==='Enter') doUnlock(); };
 $('#wipeBtn1').onclick = $('#wipeBtn2').onclick = wipe;
-$('#lockBtn').onclick = () => location.reload(); // Schlüssel liegen nur im Arbeitsspeicher
+$('#lockBtn').onclick = async () => { await iDel('meta','stay').catch(()=>{}); location.reload(); };
 $('#copyId').onclick = () => copy(me.id, 'ID kopiert');
 $('#copyLink').onclick = () => copy(inviteLink(), 'Einladungslink kopiert – schick ihn deinem Kontakt');
 $('#addBtn').onclick = async () => {
-  const id = normId($('#addId').value), name = $('#addName').value.trim();
+  const id = normId($('#addId').value.replace(/\..*$/,'')), name = $('#addName').value.trim();
   if(!/^fs[0-9a-f]{32}$/.test(id)) return toast('Ungültige ID');
   if(id===me.id) return toast('Das ist deine eigene ID');
   if(!name) return toast('Bitte Namen eingeben');
-  const c = contacts.get(id) || {id, pub:null, lastRead:0};
-  c.name = name; c.status = 'ok'; await saveContact(c);
-  $('#addId').value=$('#addName').value=''; renderContacts(); connectTo(id); openChat(id);
+  const pub = pendingPub; pendingPub = null; $('#addId').value=$('#addName').value='';
+  await addContactFromInvite({id, pub}, name);
 };
+$('#addId').oninput = () => { pendingPub = null; };
 $('#clist').onclick = e => { const d=e.target.closest('.contact'); if(d) openChat(d.dataset.id); };
 $('#backBtn').onclick = () => { cur=null; renderContacts(); show('vMain'); };
 $('#chatHead').onclick = $('#infoBtn').onclick = openInfo;
@@ -736,7 +869,17 @@ $('#callBtn').onclick = () => startCall(cur);
 $('#callAccept').onclick = acceptCall;
 $('#callEnd').onclick = () => endCall(true);
 $('#callMute').onclick = () => { if(!call||!call.stream) return; const t=call.stream.getAudioTracks()[0]; t.enabled=!t.enabled; $('#callMute').textContent = t.enabled?'🎙️':'🔇'; };
-$('#setOpen').onclick = () => { const s=settings(); $('#sHost').value=s.host||''; $('#sPort').value=s.port||''; $('#sPath').value=s.path||''; $('#sKey').value=s.key||''; $('#sSecure').checked=s.secure!==false; $('#sIce').value=s.ice||''; show('vSet'); };
+$('#showQr').onclick = () => showQr(inviteLink(), 'Mein QR-Code', 'Dein Kontakt scannt diesen Code in seiner Funkstille-App – oder mit der Handykamera, dann öffnet sich die App direkt. Er enthält deine ID und deinen öffentlichen Schlüssel.', 'vMain');
+$('#scanAdd').onclick = () => startScan('Kontakt-Code scannen', onAddScan, 'vMain');
+$('#qrBack').onclick = () => { if(qrFrom==='vInfo') openInfo(); else show(qrFrom); };
+$('#scanBack').onclick = () => { const f = scan && scan.from; stopScan(); if(f==='vInfo') openInfo(); else show(f||'vMain'); };
+$('#scanPick').onclick = () => $('#scanFile').click();
+$('#scanFile').onchange = e => { if(e.target.files[0]) scanFromFile(e.target.files[0]); e.target.value=''; };
+$('#infShowQr').onclick = async () => { const c=contacts.get(cur); showQr(safetyPayload(await safetyNumber(me.pubRaw, c.pub)), 'Sicherheitsnummer', 'Lass '+c.name+' diesen Code mit „Code des Kontakts scannen" einlesen.', 'vInfo'); };
+$('#infScanQr').onclick = () => startScan('Sicherheits-Code scannen', onVerifyScan, 'vInfo');
+$('#setOpen').onclick = () => { const s=settings(); $('#sHost').value=s.host||''; $('#sPort').value=s.port||''; $('#sPath').value=s.path||''; $('#sKey').value=s.key||''; $('#sSecure').checked=s.secure!==false; $('#sIce').value=s.ice||''; show('vSet'); refreshStay(); };
+async function refreshStay(){ const on = !!(await iGet('meta','stay')); $('#stayState').textContent = on ? 'Angemeldet bleiben ist aktiv – die App öffnet sich ohne Passwort.' : 'Beim Öffnen wird das Passwort abgefragt.'; $('#stayOff').style.display = on ? '' : 'none'; }
+$('#stayOff').onclick = async () => { await rememberVault(false); toast('Ausgeschaltet – beim nächsten Öffnen wird das Passwort abgefragt'); refreshStay(); };
 $('#setBack').onclick = () => show('vMain');
 $('#sSave').onclick = () => {
   const ice=$('#sIce').value.trim(); if(ice){ try{ JSON.parse(ice); }catch{ return toast('ICE-JSON ist ungültig'); } }
@@ -755,7 +898,8 @@ document.addEventListener('visibilitychange', async () => { if(!document.hidden 
   if(!window.isSecureContext || !crypto.subtle){ document.body.innerHTML='<div class="center"><h1>Sichere Verbindung nötig</h1><p class="sub">Funkstille muss über https:// geöffnet werden.</p></div>'; return; }
   if(typeof Peer==='undefined'){ toast('Netzwerkbibliothek konnte nicht geladen werden – Internet prüfen', 8000); }
   try{ DB = await idbOpen(); }catch{ document.body.innerHTML='<div class="center"><h1>Speicher nicht verfügbar</h1><p class="sub">Bitte nicht im privaten Modus öffnen.</p></div>'; return; }
-  show(await iGet('meta','identity') ? 'vUnlock' : 'vSetup');
+  if(!await iGet('meta','identity')) return show('vSetup');
+  if(await tryAutoUnlock()) await afterUnlock(); else show('vUnlock');
 })();
 </script>
 </body>
